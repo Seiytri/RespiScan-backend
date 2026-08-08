@@ -10,6 +10,27 @@ be exposed to any client-facing response or log.
 """
 
 from django.conf import settings
+from supabase import create_client, Client
+
+
+_client: Client | None = None
+
+
+def _get_client() -> Client:
+    """
+    Lazily initialize and return the Supabase client.
+
+    Uses the service role key from Django settings. Raises ValueError
+    if credentials are not configured.
+    """
+    global _client
+    if _client is None:
+        url: str = settings.SUPABASE_URL
+        key: str = settings.SUPABASE_SERVICE_ROLE_KEY
+        if not url or not key:
+            raise ValueError("Supabase credentials not configured in settings.")
+        _client = create_client(url, key)
+    return _client
 
 
 def upload_file(bucket: str, path: str, file_data: bytes, content_type: str = "application/octet-stream") -> dict:
@@ -23,12 +44,15 @@ def upload_file(bucket: str, path: str, file_data: bytes, content_type: str = "a
         content_type: MIME type of the file.
 
     Returns:
-        A dict with upload metadata (e.g. key, url).
-
-    Raises:
-        NotImplementedError: Stub — not yet implemented.
+        A dict with upload metadata (e.g. path).
     """
-    raise NotImplementedError("Supabase storage upload is not yet implemented.")
+    client = _get_client()
+    client.storage.from_(bucket).upload(
+        file=file_data,
+        path=path,
+        file_options={"content-type": content_type, "upsert": "true"},
+    )
+    return {"path": path, "bucket": bucket}
 
 
 def get_signed_url(bucket: str, path: str, expires_in: int = 3600) -> str:
@@ -44,12 +68,13 @@ def get_signed_url(bucket: str, path: str, expires_in: int = 3600) -> str:
         expires_in: URL validity in seconds (default 1 hour).
 
     Returns:
-        A signed URL string.
-
-    Raises:
-        NotImplementedError: Stub — not yet implemented.
+        A signed URL string, or empty string on failure.
     """
-    raise NotImplementedError("Supabase signed URL generation is not yet implemented.")
+    client = _get_client()
+    response = client.storage.from_(bucket).create_signed_url(path, expires_in)
+    if "signedURL" in response:
+        return response["signedURL"]
+    return ""
 
 
 def delete_file(bucket: str, path: str) -> None:
@@ -59,8 +84,6 @@ def delete_file(bucket: str, path: str) -> None:
     Args:
         bucket: The name of the Supabase Storage bucket.
         path: The file path/key within the bucket.
-
-    Raises:
-        NotImplementedError: Stub — not yet implemented.
     """
-    raise NotImplementedError("Supabase storage delete is not yet implemented.")
+    client = _get_client()
+    client.storage.from_(bucket).remove([path])
