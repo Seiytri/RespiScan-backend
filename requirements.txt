@@ -1,4 +1,4 @@
-﻿amqp==5.3.1
+amqp==5.3.1
 annotated-types==0.8.0
 anyio==4.14.2
 asgiref==3.12.1
@@ -18,10 +18,7 @@ Django==5.2.16
 django-cors-headers==4.9.0
 django-environ==0.14.0
 django-filter==26.1
-django-formtools==2.7
 django-otp==1.7.0
-django-phonenumber-field==8.5.0
-django-two-factor-auth==1.18.1
 djangorestframework==3.17.1
 dnspython==2.8.0
 eventlet==0.41.1
