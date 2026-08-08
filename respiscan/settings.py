@@ -136,6 +136,11 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SECURE = env('SESSION_COOKIE_SECURE')
 SESSION_COOKIE_AGE = 1800  # 30 minutes session timeout
 
+# CSRF — The frontend and backend are unified under one domain via proxy rewrites,
+# so we trust the frontend origin for CSRF checks.
+FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
+CSRF_TRUSTED_ORIGINS = [FRONTEND_URL]
+
 # Celery
 CELERY_BROKER_URL = env('REDIS_URL', default='redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
