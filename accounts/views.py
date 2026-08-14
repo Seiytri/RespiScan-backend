@@ -60,6 +60,19 @@ class LoginView(views.APIView):
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
 
+            # --- Role check ---
+            # If the frontend specifies a role (via the Employee/Administrator tab),
+            # verify the authenticated user actually has that role.
+            requested_role = serializer.validated_data.get('role')
+            if requested_role:
+                user_role = 'admin' if user.is_admin else 'employee'
+                if user_role != requested_role:
+                    role_label = 'Administrator' if requested_role == 'admin' else 'Employee'
+                    return Response(
+                        {'error': f'This account is not registered as an {role_label}.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
             # --- 2FA check ---
             confirmed_devices = TOTPDevice.objects.filter(user=user, confirmed=True)
             if confirmed_devices.exists():
@@ -92,6 +105,7 @@ class LoginView(views.APIView):
             )
             return Response(UserSerializer(user).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class LogoutView(views.APIView):

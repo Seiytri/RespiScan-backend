@@ -30,3 +30,9 @@ class SignupSerializer(serializers.ModelSerializer):
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
+    role = serializers.ChoiceField(
+        choices=['admin', 'employee'],
+        required=False,
+        allow_null=True,
+        help_text="Optional: if provided, the backend will reject login if the user's role does not match."
+    )
