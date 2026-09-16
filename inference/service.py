@@ -32,7 +32,7 @@ def run_inference(image: bytes) -> dict:
         - "confidence": float — model confidence score (0.0–1.0)
         - "gradcam_image": bytes | None — Grad-CAM heatmap overlay, if available
     """
-    url = urljoin(settings.INFERENCE_API_URL, "/gradcam")
+    url = f"{settings.INFERENCE_API_URL.rstrip('/')}/gradcam"
     
     # Send as multipart/form-data with key 'file'
     files = {"file": ("scan.png", image, "image/png")}

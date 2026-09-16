@@ -150,6 +150,9 @@ CELERY_TASK_SERIALIZER = 'json'
 SUPABASE_URL = env('SUPABASE_URL', default='')
 SUPABASE_SERVICE_ROLE_KEY = env('SUPABASE_SERVICE_ROLE_KEY', default='')
 
+# Inference API
+INFERENCE_API_URL = env('INFERENCE_API_URL', default='https://carnivore-cycle-slate.ngrok-free.dev')
+
 # Email / Notifications
 EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
 RESEND_API_KEY = env('RESEND_API_KEY', default='')

@@ -1,3 +1,73 @@
-from django.shortcuts import render
+from rest_framework import views, status
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser
+import uuid
 
-# Create your views here.
+from .models import Scan, Diagnosis
+from storage.service import upload_file
+from .tasks import process_scan_task
+from audit.service import log_action
+
+class ScanUploadView(views.APIView):
+    """
+    Handles chest X-ray uploads.
+    Saves the file to Supabase, creates the database records,
+    and dispatches a Celery task to run the inference model asynchronously.
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        patient_id = request.data.get('patient_id')
+        if not patient_id:
+            return Response({"error": "patient_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Generate a unique path for Supabase
+        ext = file_obj.name.split('.')[-1]
+        unique_filename = f"{uuid.uuid4().hex}.{ext}"
+        storage_path = f"scans/{patient_id}/{unique_filename}"
+
+        # 1. Upload original file to Supabase
+        upload_file(
+            bucket="respiscan-scans",
+            path=storage_path,
+            file_data=file_obj.read(),
+            content_type=file_obj.content_type
+        )
+
+        # 2. Create Database Records
+        scan = Scan.objects.create(
+            patient_id=patient_id,
+            uploaded_by=request.user,
+            image_path=storage_path,
+            original_filename=file_obj.name,
+            file_type=file_obj.content_type,
+            file_size=file_obj.size
+        )
+        
+        Diagnosis.objects.create(
+            scan=scan,
+            detection_result='Pending',
+            created_by=request.user
+        )
+        
+        # Log the sensitive action
+        log_action(
+            user=request.user,
+            action="scan_uploaded",
+            target_object=f"Scan:{scan.id}",
+            metadata={"patient_id": patient_id}
+        )
+
+        # 3. Trigger Async Celery Task
+        process_scan_task.delay(scan.id)
+
+        return Response({
+            "message": "Scan uploaded successfully. Inference is running in the background.",
+            "scan_id": scan.id
+        }, status=status.HTTP_202_ACCEPTED)
