@@ -71,3 +71,32 @@ class ScanUploadView(views.APIView):
             "message": "Scan uploaded successfully. Inference is running in the background.",
             "scan_id": scan.id
         }, status=status.HTTP_202_ACCEPTED)
+
+from storage.service import get_signed_url
+
+class ScanResultView(views.APIView):
+    """
+    Fetches the status and results of a scan diagnosis.
+    Returns signed URLs for the images if they exist.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, scan_id):
+        try:
+            scan = Scan.objects.get(id=scan_id)
+            diagnosis = scan.diagnosis
+        except (Scan.DoesNotExist, Diagnosis.DoesNotExist):
+            return Response({"error": "Scan not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Get signed urls for frontend display
+        original_url = get_signed_url("respiscan-scans", scan.image_path) if scan.image_path else None
+        heatmap_url = get_signed_url("respiscan-scans", diagnosis.gradcam_image_path) if diagnosis.gradcam_image_path else None
+
+        return Response({
+            "scan_id": scan.id,
+            "status": diagnosis.detection_result,
+            "confidence": diagnosis.model_confidence,
+            "original_image_url": original_url,
+            "heatmap_image_url": heatmap_url,
+            "radiologist_notes": diagnosis.radiologist_notes
+        })
