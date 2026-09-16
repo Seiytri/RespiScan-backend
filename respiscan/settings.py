@@ -145,6 +145,7 @@ CELERY_BROKER_URL = env('REDIS_URL', default='redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
+CELERY_TASK_ALWAYS_EAGER = env.bool('CELERY_EAGER', default=False)
 
 # Supabase
 SUPABASE_URL = env('SUPABASE_URL', default='')
