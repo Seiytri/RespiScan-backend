@@ -1,3 +1,5 @@
 from django.contrib import admin
+from .models import Scan, Diagnosis
 
-# Register your models here.
+admin.site.register(Scan)
+admin.site.register(Diagnosis)

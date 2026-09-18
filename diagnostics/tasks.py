@@ -38,7 +38,8 @@ def process_scan_task(scan_id: int):
     try:
         result = run_inference(image_bytes)
     except Exception as e:
-        # We could log this or mark the diagnosis as failed
+        diagnosis.detection_result = 'Failed'
+        diagnosis.save()
         return
 
     # 3. Upload Grad-CAM heatmap if present

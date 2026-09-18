@@ -40,7 +40,7 @@ def run_inference(image: bytes) -> dict:
     # Add ngrok skip header in case the free tier warning page intercepts the request
     headers = {"ngrok-skip-browser-warning": "true"}
     
-    response = requests.post(url, files=files, headers=headers)
+    response = requests.post(url, files=files, headers=headers, timeout=30)
     response.raise_for_status()
     
     # The /gradcam endpoint returns the raw PNG image in the body

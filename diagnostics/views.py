@@ -100,3 +100,19 @@ class ScanResultView(views.APIView):
             "heatmap_image_url": heatmap_url,
             "radiologist_notes": diagnosis.radiologist_notes
         })
+
+from django.http import HttpResponse
+from reports.services import generate_clinical_pdf
+
+class ScanExportView(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, scan_id):
+        try:
+            pdf_bytes = generate_clinical_pdf(scan_id)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+            
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="scan_{scan_id}_report.pdf"'
+        return response
