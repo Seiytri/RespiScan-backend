@@ -67,3 +67,28 @@ class AnalyticsView(APIView):
             'distribution': distribution,
             'recent_activity': recent_activity
         })
+
+from .models import SystemSettings
+from rest_framework import serializers
+from rest_framework.permissions import IsAdminUser
+
+class SystemSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SystemSettings
+        fields = '__all__'
+
+class SystemSettingsView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        settings = SystemSettings.get_settings()
+        serializer = SystemSettingsSerializer(settings)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        settings = SystemSettings.get_settings()
+        serializer = SystemSettingsSerializer(settings, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)

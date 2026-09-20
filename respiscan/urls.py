@@ -6,8 +6,8 @@ api_urlpatterns = [
     path('patients/', include('patients.urls')),
     path('diagnostics/', include('diagnostics.urls')),
     path('analytics/', include('core.urls')),
-    # path('reports/', include('reports.urls')),
-    # path('settings/', include('core.urls')),
+    path('reports/', include('reports.urls')),
+    path('notifications/', include('notifications.urls')),
 ]
 
 urlpatterns = [

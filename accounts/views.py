@@ -1,15 +1,17 @@
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.middleware.csrf import get_token
 from django.http import JsonResponse
-from rest_framework import status, views
+from rest_framework import status, views, viewsets, filters
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
-from .serializers import UserSerializer, LoginSerializer, SignupSerializer
+from .serializers import UserSerializer, LoginSerializer, SignupSerializer, EmployeeSerializer
 from .totp_serializers import TOTPVerifySerializer
 from audit.service import log_action
 
+User = get_user_model()
 
 def _get_client_ip(request):
     """Extract the client IP from the request, respecting X-Forwarded-For."""
@@ -49,10 +51,22 @@ class LoginView(views.APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
+            username_or_email = serializer.validated_data['username']
+            password = serializer.validated_data['password']
+
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            
+            # Resolve email to username
+            if '@' in username_or_email:
+                user_obj = User.objects.filter(email=username_or_email).first()
+                if user_obj:
+                    username_or_email = user_obj.username
+
             user = authenticate(
                 request,
-                username=serializer.validated_data['username'],
-                password=serializer.validated_data['password'],
+                username=username_or_email,
+                password=password,
             )
             if user is None:
                 return Response(
@@ -129,6 +143,28 @@ class UserMeView(views.APIView):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
 
+    def patch(self, request):
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ChangePasswordView(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        user = request.user
+        current_password = request.data.get('current_password')
+        new_password = request.data.get('new_password')
+        
+        if not user.check_password(current_password):
+            return Response({"error": "Incorrect current password."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        user.set_password(new_password)
+        user.save()
+        return Response({"message": "Password updated successfully."})
+
 
 # ---------------------------------------------------------------------------
 # TOTP setup & confirmation
@@ -201,3 +237,62 @@ class TOTPConfirmView(views.APIView):
             {"message": "TOTP device confirmed. Two-factor authentication is now active."},
             status=status.HTTP_200_OK,
         )
+
+
+# ---------------------------------------------------------------------------
+# Employee management (Admin only)
+# ---------------------------------------------------------------------------
+
+class EmployeeViewSet(viewsets.ModelViewSet):
+    """
+    Admin-only viewset for managing employee/staff accounts.
+    Supports full CRUD + approve/deactivate actions.
+    """
+    serializer_class = EmployeeSerializer
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['username', 'first_name', 'last_name', 'email', 'department']
+    ordering_fields = ['date_joined', 'first_name', 'last_name']
+    ordering = ['-date_joined']
+
+    def get_queryset(self):
+        return User.objects.all().order_by('-date_joined')
+
+    def perform_destroy(self, instance):
+        """Soft-delete: deactivate instead of hard-deleting."""
+        instance.is_active = False
+        instance.save()
+        log_action(
+            user=self.request.user,
+            action="employee_deactivated",
+            target_object=f"User:{instance.pk}",
+            metadata={"username": instance.username},
+        )
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Activate a pending employee account."""
+        user = self.get_object()
+        user.is_active = True
+        user.save()
+        log_action(
+            user=request.user,
+            action="employee_approved",
+            target_object=f"User:{user.pk}",
+            metadata={"username": user.username},
+        )
+        return Response(EmployeeSerializer(user).data)
+
+    @action(detail=True, methods=['post'])
+    def deactivate(self, request, pk=None):
+        """Deactivate an employee account."""
+        user = self.get_object()
+        user.is_active = False
+        user.save()
+        log_action(
+            user=request.user,
+            action="employee_deactivated",
+            target_object=f"User:{user.pk}",
+            metadata={"username": user.username},
+        )
+        return Response(EmployeeSerializer(user).data)
