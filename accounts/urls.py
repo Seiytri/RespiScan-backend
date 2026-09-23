@@ -10,6 +10,7 @@ from .views import (
     TOTPSetupView,
     TOTPConfirmView,
     EmployeeViewSet,
+    ActiveSessionsView,
 )
 
 router = DefaultRouter()
@@ -26,6 +27,10 @@ urlpatterns = [
     # TOTP two-factor authentication
     path('totp/setup/', TOTPSetupView.as_view(), name='totp-setup'),
     path('totp/confirm/', TOTPConfirmView.as_view(), name='totp-confirm'),
+
+    # Active Sessions
+    path('sessions/', ActiveSessionsView.as_view(), name='active-sessions'),
+    path('sessions/<str:session_key>/', ActiveSessionsView.as_view(), name='revoke-session'),
 
     # Employee management (admin only)
     path('', include(router.urls)),

@@ -111,6 +111,14 @@ class LoginView(views.APIView):
 
             # All checks passed — complete login
             login(request, user)
+            
+            # Handle remember me session expiry
+            remember_me = request.data.get('remember_me', False)
+            if remember_me:
+                request.session.set_expiry(1209600)  # 2 weeks
+            else:
+                request.session.set_expiry(0)  # expires when browser is closed
+
             log_action(
                 user=user,
                 action="user_login",
@@ -150,6 +158,8 @@ class UserMeView(views.APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+from django.contrib.auth import update_session_auth_hash
+
 class ChangePasswordView(views.APIView):
     permission_classes = [IsAuthenticated]
 
@@ -163,6 +173,10 @@ class ChangePasswordView(views.APIView):
             
         user.set_password(new_password)
         user.save()
+        
+        # Keep the user logged in by updating their session hash
+        update_session_auth_hash(request, user)
+        
         return Response({"message": "Password updated successfully."})
 
 
@@ -296,3 +310,66 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             metadata={"username": user.username},
         )
         return Response(EmployeeSerializer(user).data)
+
+
+from .models import DeviceSession
+from django.contrib.sessions.models import Session
+
+def parse_user_agent(ua_string):
+    if not ua_string:
+        return 'Unknown Device'
+        
+    browser = 'Unknown Browser'
+    if 'Edg' in ua_string: browser = 'Edge'
+    elif 'Chrome' in ua_string: browser = 'Chrome'
+    elif 'Firefox' in ua_string: browser = 'Firefox'
+    elif 'Safari' in ua_string: browser = 'Safari'
+    
+    os = 'Unknown OS'
+    if 'Windows' in ua_string: os = 'Windows'
+    elif 'Mac OS' in ua_string: os = 'macOS'
+    elif 'Linux' in ua_string: os = 'Linux'
+    elif 'Android' in ua_string: os = 'Android'
+    elif 'iPhone' in ua_string or 'iPad' in ua_string: os = 'iOS'
+    
+    return f'{browser} · {os}'
+
+class ActiveSessionsView(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        sessions = DeviceSession.objects.filter(user=request.user).order_by('-last_activity')
+        current_session_key = request.session.session_key
+        
+        data = []
+        for s in sessions:
+            # Cleanup expired sessions lazily
+            if not Session.objects.filter(session_key=s.session_key).exists():
+                s.delete()
+                continue
+                
+            is_current = (s.session_key == current_session_key)
+            from django.utils.timesince import timesince
+            
+            data.append({
+                'id': s.session_key,
+                'device': parse_user_agent(s.user_agent),
+                'location': s.ip_address,
+                'current': is_current,
+                'when': 'Now' if is_current else f'{timesince(s.last_activity)} ago',
+            })
+            
+        return Response(data)
+        
+    def delete(self, request, session_key):
+        # Revoke a specific session
+        if session_key == request.session.session_key:
+            return Response({'error': 'Cannot revoke current session. Use logout instead.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            device_session = DeviceSession.objects.get(user=request.user, session_key=session_key)
+            device_session.delete()
+            Session.objects.filter(session_key=session_key).delete()
+            return Response({'message': 'Session revoked successfully.'})
+        except DeviceSession.DoesNotExist:
+            return Response({'error': 'Session not found.'}, status=status.HTTP_404_NOT_FOUND)
