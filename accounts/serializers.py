@@ -6,7 +6,7 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'role', 'title', 'department', 'bio', 'first_name', 'last_name']
+        fields = ['id', 'username', 'email', 'role', 'title', 'department', 'license_number', 'bio', 'first_name', 'last_name']
         read_only_fields = ['id', 'role']
 
 
@@ -18,7 +18,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'title', 'department', 'bio',
+            'role', 'title', 'department', 'license_number', 'bio',
             'is_active', 'date_joined', 'password',
         ]
         read_only_fields = ['id', 'date_joined']
