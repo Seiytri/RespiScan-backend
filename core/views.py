@@ -72,6 +72,7 @@ class AnalyticsView(APIView):
 
         # ── Monthly trends ──────────────────────────────────────────
         monthly_trends = []
+        highest_volume_month = {'name': None, 'scans': 0}
         for i in range(6):
             month_date = now - timedelta(days=30 * (5 - i))
             scans = filtered_scans.filter(
@@ -83,11 +84,17 @@ class AnalyticsView(APIView):
                 scan__upload_timestamp__month=month_date.month,
                 detection_result='Positive'
             ).count()
+            
+            pos_rate = round((positive / scans * 100), 1) if scans > 0 else 0.0
+            
             monthly_trends.append({
                 'name': month_date.strftime('%b'),
                 'Scans': scans,
-                'Positive': positive
+                'Positive': positive,
+                'positivity_rate': pos_rate
             })
+            if scans > highest_volume_month['scans']:
+                highest_volume_month = {'name': month_date.strftime('%B'), 'scans': scans}
 
         # ── Distribution (pos vs neg) ───────────────────────────────
         negative_detections = filtered_diagnoses.filter(detection_result='Negative').count()
@@ -104,7 +111,7 @@ class AnalyticsView(APIView):
             {'name': 'Female', 'value': female_count},
         ]
 
-        # ── Age-range pneumonia breakdown ───────────────────────────
+        # ── Age-range pneumonia breakdown & Age+Gender ──────────────
         AGE_BUCKETS = [
             ('0-5', 0, 5),
             ('6-12', 6, 12),
@@ -115,18 +122,35 @@ class AnalyticsView(APIView):
             ('61+', 61, 200),
         ]
         age_pneumonia = []
+        age_gender_distribution = []
+        highest_risk = {'group': None, 'rate': 0}
+
         for label, lo, hi in AGE_BUCKETS:
             bucket_patients = filtered_patients.filter(age__gte=lo, age__lte=hi)
-            bucket_ids = bucket_patients.values_list('id', flat=True)
-            pos = filtered_diagnoses.filter(
-                scan__patient_id__in=bucket_ids,
-                detection_result='Positive'
-            ).count()
+            
+            male_bucket_ids = bucket_patients.filter(gender__iexact='Male').values_list('id', flat=True)
+            female_bucket_ids = bucket_patients.filter(gender__iexact='Female').values_list('id', flat=True)
+            
+            male_pos = filtered_diagnoses.filter(scan__patient_id__in=male_bucket_ids, detection_result='Positive').count()
+            female_pos = filtered_diagnoses.filter(scan__patient_id__in=female_bucket_ids, detection_result='Positive').count()
+            total_pos = male_pos + female_pos
             total = bucket_patients.count()
+            
+            if total > 0:
+                rate = (total_pos / total) * 100
+                if rate > highest_risk['rate']:
+                    highest_risk = {'group': label, 'rate': rate, 'pos': total_pos, 'total': total}
+
             age_pneumonia.append({
                 'range': label,
-                'positive': pos,
+                'positive': total_pos,
                 'total': total,
+            })
+            
+            age_gender_distribution.append({
+                'range': label,
+                'Male': male_pos,
+                'Female': female_pos,
             })
 
         # ── Recent activity ─────────────────────────────────────────
@@ -140,6 +164,35 @@ class AnalyticsView(APIView):
                 'patient_id': patient_id,
                 'minutes_ago': mins_ago
             })
+            
+        # ── Key Findings ────────────────────────────────────────────
+        key_findings = []
+        
+        # 1. Growth Alert
+        if scan_growth_percent > 0:
+            key_findings.append({
+                'id': 'growth', 'icon': 'TrendingUp', 'type': 'neutral', 'title': 'Increasing Scan Volume', 
+                'description': f'Scans processed increased by {scan_growth_percent}% compared to last week.'
+            })
+        elif scan_growth_percent < 0:
+            key_findings.append({
+                'id': 'growth', 'icon': 'TrendingDown', 'type': 'success', 'title': 'Decreasing Scan Volume', 
+                'description': f'Scans processed dropped by {abs(scan_growth_percent)}% compared to last week.'
+            })
+            
+        # 2. Risk Demographic
+        if highest_risk['group']:
+            key_findings.append({
+                'id': 'risk', 'icon': 'AlertTriangle', 'type': 'warning', 'title': 'Highest Risk Demographic',
+                'description': f'Patients aged {highest_risk["group"]} have the highest positivity rate ({round(highest_risk["rate"])}%).'
+            })
+            
+        # 3. Peak Month
+        if highest_volume_month['name']:
+            key_findings.append({
+                'id': 'peak', 'icon': 'Info', 'type': 'info', 'title': 'Peak Detection Month',
+                'description': f'{highest_volume_month["name"]} had the highest volume of scans ({highest_volume_month["scans"]} scans).'
+            })
 
         return Response({
             'total_patients': total_patients,
@@ -152,7 +205,9 @@ class AnalyticsView(APIView):
             'distribution': distribution,
             'gender_distribution': gender_distribution,
             'age_pneumonia': age_pneumonia,
+            'age_gender_distribution': age_gender_distribution,
             'recent_activity': recent_activity,
+            'key_findings': key_findings,
         })
 
 
