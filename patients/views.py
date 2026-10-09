@@ -1,8 +1,13 @@
-from rest_framework import viewsets, filters
+from rest_framework import viewsets, filters, pagination
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters import rest_framework as django_filters
 from .models import Patient
 from .serializers import PatientSerializer
+
+class StandardResultsSetPagination(pagination.PageNumberPagination):
+    page_size = 25
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 class PatientFilter(django_filters.FilterSet):
     age_min = django_filters.NumberFilter(field_name="age", lookup_expr='gte')
@@ -13,8 +18,9 @@ class PatientFilter(django_filters.FilterSet):
         fields = ['status', 'gender']
 
 class PatientViewSet(viewsets.ModelViewSet):
-    queryset = Patient.objects.filter(is_active=True).order_by('created_at')
+    queryset = Patient.objects.filter(is_active=True).order_by('-created_at')
     serializer_class = PatientSerializer
+    pagination_class = StandardResultsSetPagination
     
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     
