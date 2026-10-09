@@ -263,7 +263,10 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     Supports full CRUD + approve/deactivate actions.
     """
     serializer_class = EmployeeSerializer
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsAdminUser()]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['username', 'first_name', 'last_name', 'email', 'department']
     ordering_fields = ['date_joined', 'first_name', 'last_name']
