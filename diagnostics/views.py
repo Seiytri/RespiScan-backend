@@ -134,7 +134,7 @@ class ScanListView(generics.ListAPIView):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     
     # Filter by exact fields
-    filterset_fields = ['patient__id', 'diagnosis__detection_result']
+    filterset_fields = ['patient__id', 'diagnosis__detection_result', 'uploaded_by']
     
     # Search by partial match
     search_fields = ['patient__name', 'patient__patient_id']
