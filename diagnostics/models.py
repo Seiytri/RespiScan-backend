@@ -19,6 +19,7 @@ class Diagnosis(models.Model):
         ('Positive', 'Positive'),
         ('Negative', 'Negative'),
         ('Pending', 'Pending'),
+        ('Failed', 'Failed'),
     )
 
     scan = models.OneToOneField(Scan, on_delete=models.CASCADE, related_name='diagnosis')

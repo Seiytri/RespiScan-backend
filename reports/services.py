@@ -31,7 +31,7 @@ def generate_clinical_pdf(scan_id: int) -> bytes:
     p.drawString(100, 670, f"Age: {age}")
     p.drawString(100, 650, f"Gender: {gender}")
 
-    p.drawString(100, 610, f"Upload Date: {scan.created_at.strftime('%Y-%m-%d %H:%M')}")
+    p.drawString(100, 610, f"Upload Date: {scan.upload_timestamp.strftime('%Y-%m-%d %H:%M')}")
     p.drawString(100, 590, f"Filename: {scan.original_filename}")
 
     det_result = diagnosis.detection_result if diagnosis else "N/A"
@@ -85,26 +85,26 @@ def generate_analytics_pdf(start_date: date, end_date: date) -> bytes:
     ).count()
 
     total_scans = Scan.objects.filter(
-        created_at__date__gte=start_date,
-        created_at__date__lte=end_date,
+        upload_timestamp__date__gte=start_date,
+        upload_timestamp__date__lte=end_date,
     ).count()
 
     positive = Diagnosis.objects.filter(
         detection_result='Positive',
-        diagnosed_at__date__gte=start_date,
-        diagnosed_at__date__lte=end_date,
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date,
     ).count()
 
     negative = Diagnosis.objects.filter(
         detection_result='Negative',
-        diagnosed_at__date__gte=start_date,
-        diagnosed_at__date__lte=end_date,
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date,
     ).count()
 
     pending = Diagnosis.objects.filter(
         detection_result='Pending',
-        diagnosed_at__date__gte=start_date,
-        diagnosed_at__date__lte=end_date,
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date,
     ).count()
 
     # Section: Summary Statistics

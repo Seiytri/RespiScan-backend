@@ -95,7 +95,7 @@ class ScanUploadTestCase(TestCase):
         self.assertTrue(diagnosis.gradcam_image_path.startswith(scan.image_path + '_heatmap_'))
         
         mock_get_signed_url.assert_called_once_with(bucket="respiscan-scans", path=scan.image_path)
-        mock_requests_get.assert_called_once_with("http://fake-signed-url.com/fake.png")
+        mock_requests_get.assert_called_once_with("http://fake-signed-url.com/fake.png", timeout=30)
         mock_run_inference.assert_called_once_with(b"downloaded_image_bytes")
         mock_upload_file.assert_called_once()
         

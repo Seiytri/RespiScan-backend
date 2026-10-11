@@ -18,11 +18,9 @@ def process_scan_task(scan_id: int):
     4. Updates the Diagnosis model.
     """
     try:
-        scan = Scan.objects.get(id=scan_id)
+        scan = Scan.objects.select_related('patient', 'diagnosis').get(id=scan_id)
         diagnosis = scan.diagnosis
-    except Scan.DoesNotExist:
-        return
-    except Diagnosis.DoesNotExist:
+    except (Scan.DoesNotExist, Diagnosis.DoesNotExist):
         return
 
     # 1. Download the original image from Supabase (using a signed URL to fetch it securely)
@@ -30,7 +28,7 @@ def process_scan_task(scan_id: int):
     if not signed_url:
         return
         
-    response = requests.get(signed_url)
+    response = requests.get(signed_url, timeout=30)
     response.raise_for_status()
     image_bytes = response.content
 
@@ -69,5 +67,15 @@ def process_scan_task(scan_id: int):
         diagnosis.model_confidence = result.get("confidence", 0.0)
         diagnosis.gradcam_image_path = gradcam_path
         diagnosis.save()
+
+        # Update patient latest scan info only if this scan is newer or equal (avoid out-of-order race conditions)
+        patient = scan.patient
+        if patient:
+            is_newer = (patient.last_scan_date is None) or (scan.upload_timestamp >= patient.last_scan_date)
+            if is_newer:
+                patient.last_scan_date = scan.upload_timestamp
+                if mapped_result in ['Positive', 'Negative']:
+                    patient.status = mapped_result
+                patient.save(update_fields=['last_scan_date', 'status', 'updated_at'])
         
     # (Optional) We could trigger a notification here using notifications.service.send_email
