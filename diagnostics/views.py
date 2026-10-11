@@ -116,3 +116,28 @@ class ScanExportView(views.APIView):
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="scan_{scan_id}_report.pdf"'
         return response
+
+from rest_framework import generics
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters
+from .serializers import ScanSerializer
+from patients.views import StandardResultsSetPagination
+
+class ScanListView(generics.ListAPIView):
+    """
+    Lists all past scans, searchable by patient name, filterable.
+    """
+    permission_classes = [IsAuthenticated]
+    queryset = Scan.objects.all().order_by('-upload_timestamp')
+    serializer_class = ScanSerializer
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    
+    # Filter by exact fields
+    filterset_fields = ['patient__id', 'diagnosis__detection_result', 'uploaded_by']
+    
+    # Search by partial match
+    search_fields = ['patient__name', 'patient__patient_id']
+    
+    # Allow ordering
+    ordering_fields = ['upload_timestamp', 'diagnosis__model_confidence']

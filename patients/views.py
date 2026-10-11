@@ -1,4 +1,4 @@
-from rest_framework import viewsets, filters, status
+from rest_framework import viewsets, filters, status, pagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -10,6 +10,11 @@ from audit.service import log_action
 from .models import Patient
 from .serializers import PatientSerializer
 
+class StandardResultsSetPagination(pagination.PageNumberPagination):
+    page_size = 25
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
 class PatientFilter(django_filters.FilterSet):
     age_min = django_filters.NumberFilter(field_name="age", lookup_expr='gte')
     age_max = django_filters.NumberFilter(field_name="age", lookup_expr='lte')
@@ -20,8 +25,9 @@ class PatientFilter(django_filters.FilterSet):
 
 class PatientViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
-    queryset = Patient.objects.filter(is_active=True).order_by('created_at')
+    queryset = Patient.objects.filter(is_active=True).order_by('-created_at')
     serializer_class = PatientSerializer
+    pagination_class = StandardResultsSetPagination
     
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     
