@@ -141,3 +141,50 @@ class ScanListView(generics.ListAPIView):
     
     # Allow ordering
     ordering_fields = ['upload_timestamp', 'diagnosis__model_confidence']
+
+
+from django.http import HttpResponseRedirect, Http404
+from rest_framework.permissions import AllowAny
+
+class ScanImageView(views.APIView):
+    """
+    Direct asynchronous image proxy/redirect for a scan's original image.
+    Redirects to Supabase signed URL and caches for high performance.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, scan_id):
+        try:
+            scan = Scan.objects.get(id=scan_id)
+        except Scan.DoesNotExist:
+            raise Http404("Scan not found")
+        if not scan.image_path:
+            raise Http404("Image path not found")
+        url = get_signed_url("respiscan-scans", scan.image_path, expires_in=7200)
+        if not url:
+            raise Http404("Image could not be retrieved")
+        response = HttpResponseRedirect(url)
+        response['Cache-Control'] = 'public, max-age=3600'
+        return response
+
+
+class ScanHeatmapView(views.APIView):
+    """
+    Direct asynchronous image proxy/redirect for a scan's Grad-CAM heatmap.
+    Redirects to Supabase signed URL and caches for high performance.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, scan_id):
+        try:
+            diagnosis = Diagnosis.objects.get(scan_id=scan_id)
+        except Diagnosis.DoesNotExist:
+            raise Http404("Diagnosis not found")
+        if not diagnosis.gradcam_image_path:
+            raise Http404("Heatmap image not found")
+        url = get_signed_url("respiscan-scans", diagnosis.gradcam_image_path, expires_in=7200)
+        if not url:
+            raise Http404("Heatmap could not be retrieved")
+        response = HttpResponseRedirect(url)
+        response['Cache-Control'] = 'public, max-age=3600'
+        return response

@@ -6,6 +6,7 @@ from .views import (
     LoginView,
     LogoutView,
     UserMeView,
+    AvatarUploadView,
     ChangePasswordView,
     TOTPSetupView,
     TOTPConfirmView,
@@ -22,6 +23,7 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('me/', UserMeView.as_view(), name='user-me'),
+    path('me/avatar/', AvatarUploadView.as_view(), name='user-avatar'),
     path('me/password/', ChangePasswordView.as_view(), name='change-password'),
 
     # TOTP two-factor authentication

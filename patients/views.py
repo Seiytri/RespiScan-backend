@@ -25,7 +25,7 @@ class PatientFilter(django_filters.FilterSet):
 
 class PatientViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
-    queryset = Patient.objects.filter(is_active=True).order_by('-created_at')
+    queryset = Patient.objects.filter(is_active=True).order_by('name')
     serializer_class = PatientSerializer
     pagination_class = StandardResultsSetPagination
     
@@ -34,12 +34,12 @@ class PatientViewSet(viewsets.ModelViewSet):
     # Filter by exact fields
     filterset_class = PatientFilter
     
-    # Search by partial match on these fields
-    search_fields = ['name', 'patient_id']
+    # Search by starts-with prefix match on these fields
+    search_fields = ['^name', '^patient_id']
     
     # Allow frontend to order by these fields
-    ordering_fields = ['created_at', 'last_scan_date', 'name', 'age']
-    ordering = ['-created_at']
+    ordering_fields = ['name', 'created_at', 'last_scan_date', 'age']
+    ordering = ['name']
 
     def get_object(self):
         """
@@ -93,22 +93,8 @@ class PatientViewSet(viewsets.ModelViewSet):
         for scan in scans:
             diag = getattr(scan, 'diagnosis', None)
             
-            # Generate temporary secure signed URLs (5 min TTL) with defensive exception handling
-            original_url = None
-            if scan.image_path:
-                try:
-                    url = get_signed_url("respiscan-scans", scan.image_path, expires_in=300)
-                    original_url = url if url else None
-                except Exception:
-                    original_url = None
-
-            heatmap_url = None
-            if diag and diag.gradcam_image_path:
-                try:
-                    url = get_signed_url("respiscan-scans", diag.gradcam_image_path, expires_in=300)
-                    heatmap_url = url if url else None
-                except Exception:
-                    heatmap_url = None
+            original_url = f"/api/diagnostics/scans/{scan.id}/image/" if scan.image_path else None
+            heatmap_url = f"/api/diagnostics/scans/{scan.id}/heatmap/" if (diag and diag.gradcam_image_path) else None
 
             history_data.append({
                 "scan_id": scan.id,

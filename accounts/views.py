@@ -10,6 +10,8 @@ from django_otp.plugins.otp_totp.models import TOTPDevice
 from .serializers import UserSerializer, LoginSerializer, SignupSerializer, EmployeeSerializer
 from .totp_serializers import TOTPVerifySerializer
 from audit.service import log_action
+from storage.service import upload_file, delete_file, get_signed_url
+import uuid
 
 User = get_user_model()
 
@@ -157,6 +159,86 @@ class UserMeView(views.APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AvatarUploadView(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        file_obj = request.FILES.get('avatar')
+        if not file_obj:
+            return Response({"error": "No avatar file provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate file type
+        allowed_types = ['image/jpeg', 'image/png', 'image/webp']
+        if file_obj.content_type not in allowed_types:
+            return Response(
+                {"error": f"Invalid file type {file_obj.content_type}. Allowed: JPEG, PNG, WEBP."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate file size (max 5MB)
+        if file_obj.size > 5 * 1024 * 1024:
+            return Response(
+                {"error": "Avatar image file size must not exceed 5MB."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user = request.user
+
+        # Delete existing avatar if exists
+        if user.avatar_path:
+            try:
+                delete_file(bucket="respiscan-scans", path=user.avatar_path)
+            except Exception:
+                pass
+
+        ext = file_obj.name.split('.')[-1].lower() if '.' in file_obj.name else 'png'
+        storage_path = f"avatars/{user.id}/{uuid.uuid4().hex[:12]}.{ext}"
+
+        try:
+            upload_file(
+                bucket="respiscan-scans",
+                path=storage_path,
+                file_data=file_obj.read(),
+                content_type=file_obj.content_type
+            )
+        except Exception as e:
+            return Response({"error": f"Failed to upload to storage: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        user.avatar_path = storage_path
+        user.avatar_url = get_signed_url(bucket="respiscan-scans", path=storage_path, expires_in=2592000) or None
+        user.save(update_fields=['avatar_path', 'avatar_url'])
+
+        log_action(
+            user=user,
+            action="avatar_uploaded",
+            target_object=f"User:{user.pk}",
+            metadata={"storage_path": storage_path}
+        )
+
+        return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        user = request.user
+        if user.avatar_path:
+            try:
+                delete_file(bucket="respiscan-scans", path=user.avatar_path)
+            except Exception:
+                pass
+            user.avatar_path = None
+            user.avatar_url = None
+            user.save(update_fields=['avatar_path', 'avatar_url'])
+
+            log_action(
+                user=user,
+                action="avatar_deleted",
+                target_object=f"User:{user.pk}",
+                metadata={}
+            )
+
+        return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+
 
 from django.contrib.auth import update_session_auth_hash
 

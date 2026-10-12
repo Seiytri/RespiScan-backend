@@ -11,6 +11,8 @@ class User(AbstractUser):
     department = models.CharField(max_length=100, blank=True)
     license_number = models.CharField(max_length=50, blank=True, help_text='PRC License Number')
     bio = models.TextField(blank=True)
+    avatar_path = models.CharField(max_length=512, blank=True, null=True, help_text="Path to avatar image in Supabase Storage")
+    avatar_url = models.TextField(blank=True, null=True, help_text="Cached signed URL for avatar image")
 
     def __str__(self):
         return self.username

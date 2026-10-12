@@ -154,14 +154,24 @@ class AnalyticsView(APIView):
             })
 
         # ── Recent activity ─────────────────────────────────────────
-        recent_diagnoses = filtered_diagnoses.order_by('-created_at')[:5]
+        recent_diagnoses = filtered_diagnoses.select_related('scan__patient').order_by('-created_at')[:5]
         recent_activity = []
         for d in recent_diagnoses:
             mins_ago = int((now - d.created_at).total_seconds() / 60)
-            patient_id = d.scan.patient.patient_id if hasattr(d, 'scan') and hasattr(d.scan, 'patient') else 'N/A'
+            patient = getattr(d.scan, 'patient', None) if hasattr(d, 'scan') else None
+            patient_code = patient.patient_id if patient else 'N/A'
+            patient_name = patient.name if patient else 'Unknown Patient'
+            patient_pk = patient.id if patient else None
+            gender = patient.gender if patient else ''
+            age = patient.age if patient else None
             recent_activity.append({
                 'action': 'Diagnosis Completed',
-                'patient_id': patient_id,
+                'patient_id': patient_code,
+                'patient_name': patient_name,
+                'patient_pk': patient_pk,
+                'gender': gender,
+                'age': age,
+                'detection_result': d.detection_result,
                 'minutes_ago': mins_ago
             })
             
