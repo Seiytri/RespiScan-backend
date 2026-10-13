@@ -50,6 +50,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         password = validated_data.pop('password', None)
         user = User(**validated_data)
+        if user.role == 'admin':
+            user.is_staff = True
         if password:
             user.set_password(password)
         else:
@@ -61,6 +63,10 @@ class EmployeeSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+        if instance.role == 'admin':
+            instance.is_staff = True
+        elif instance.role == 'employee' and not instance.is_superuser:
+            instance.is_staff = False
         if password:
             instance.set_password(password)
         instance.save()

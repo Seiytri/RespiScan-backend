@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from rest_framework import status, views, viewsets, filters
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser, BasePermission
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
 from .serializers import UserSerializer, LoginSerializer, SignupSerializer, EmployeeSerializer
@@ -339,16 +339,28 @@ class TOTPConfirmView(views.APIView):
 # Employee management (Admin only)
 # ---------------------------------------------------------------------------
 
+class IsAdminOrStaff(BasePermission):
+    """Allows access to users who have admin role or is_staff flag."""
+    def has_permission(self, request, view):
+        return bool(
+            request.user and
+            request.user.is_authenticated and
+            (request.user.is_staff or getattr(request.user, 'role', '') == 'admin' or request.user.is_superuser)
+        )
+
+
 class EmployeeViewSet(viewsets.ModelViewSet):
     """
-    Admin-only viewset for managing employee/staff accounts.
-    Supports full CRUD + approve/deactivate actions.
+    Admin-only viewset for managing employee and co-administrator accounts.
+    Supports full CRUD + approve/deactivate/reset-password actions.
     """
     serializer_class = EmployeeSerializer
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
-        return [IsAuthenticated(), IsAdminUser()]
+        return [IsAuthenticated(), IsAdminOrStaff()]
+
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['username', 'first_name', 'last_name', 'email', 'department']
     ordering_fields = ['date_joined', 'first_name', 'last_name']
@@ -395,6 +407,38 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             metadata={"username": user.username},
         )
         return Response(EmployeeSerializer(user).data)
+
+    @action(detail=True, methods=['post'], url_path='reset-password')
+    def reset_password(self, request, pk=None):
+        """
+        Securely reset any user account password (employee or co-administrator).
+        Logs an audit trail record attributing the reset to the executing administrator.
+        """
+        user = self.get_object()
+        new_password = request.data.get('password')
+        if not new_password or len(str(new_password).strip()) < 8:
+            return Response(
+                {"error": "Password must be at least 8 characters long."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user.set_password(new_password)
+        user.save()
+
+        log_action(
+            user=request.user,
+            action="password_reset_by_admin",
+            target_object=f"User:{user.pk}",
+            metadata={
+                "target_username": user.username,
+                "target_role": user.role,
+                "admin_username": request.user.username,
+            }
+        )
+
+        return Response({
+            "message": f"Password for {user.username} has been reset successfully."
+        }, status=status.HTTP_200_OK)
 
 
 from .models import DeviceSession
